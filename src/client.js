@@ -2,6 +2,13 @@ import WebSocket from 'ws';
 
 const DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
 
+// Connection and retry constants
+const CONNECTION_TIMEOUT = 5000; // 5 seconds
+const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+const MAX_RECONNECT_ATTEMPTS = 5;
+const INITIAL_RECONNECT_DELAY = 1000; // 1 second
+const MAX_RECONNECT_DELAY = 30000; // 30 seconds
+
 export class GraphQLClient {
   constructor(url = 'ws://localhost:4000/graphql', clientId = null) {
     this.url = url;
@@ -11,6 +18,12 @@ export class GraphQLClient {
     this.subscriptions = new Map();
     this.subscriptionId = 0;
     this.messageHandlers = [];
+    this.lastMessageId = null;
+    this.heartbeatInterval = null;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = MAX_RECONNECT_ATTEMPTS;
+    this.reconnectDelay = INITIAL_RECONNECT_DELAY;
+    this.shouldReconnect = true;
   }
 
   async connect() {
@@ -28,6 +41,13 @@ export class GraphQLClient {
           payload: {},
         };
         this.ws.send(JSON.stringify(payload));
+
+        // Start heartbeat mechanism
+        this.startHeartbeat();
+
+        // Reset reconnect attempts on successful connection
+        this.reconnectAttempts = 0;
+        this.reconnectDelay = INITIAL_RECONNECT_DELAY;
       });
 
       this.ws.on('message', (data) => {
@@ -41,6 +61,12 @@ export class GraphQLClient {
           resolve();
         } else if (msg.type === 'data' && msg.payload?.data?.onMessage) {
           const message = msg.payload.data.onMessage;
+
+          // Track the last received message ID for resume functionality
+          if (message.id) {
+            this.lastMessageId = message.id;
+          }
+
           // Call all registered message handlers
           this.messageHandlers.forEach((handler) => {
             handler(message);
@@ -48,19 +74,36 @@ export class GraphQLClient {
         } else if (msg.type === 'error') {
           console.error('❌ GraphQL error:', msg.payload);
           reject(new Error(msg.payload));
+        } else if (msg.type === 'pong') {
+          // Handle pong response from heartbeat
+          if (DEBUG) {
+            console.log('💗 Received pong from server');
+          }
         }
       });
 
       this.ws.on('error', (error) => {
         console.error('❌ WebSocket error:', error.message);
-        reject(error);
+        this.stopHeartbeat();
+        if (!this.connected) {
+          reject(error);
+        }
       });
 
-      this.ws.on('close', () => {
-        if (DEBUG) {
-          console.log('🔴 Disconnected from server');
-        }
+      this.ws.on('close', (code, reason) => {
+        console.log(
+          `🔴 Disconnected from server (code: ${code}, reason: ${reason})`,
+        );
         this.connected = false;
+        this.stopHeartbeat();
+
+        // Attempt reconnection if enabled
+        if (
+          this.shouldReconnect &&
+          this.reconnectAttempts < this.maxReconnectAttempts
+        ) {
+          this.attemptReconnect();
+        }
       });
 
       // Set timeout for connection
@@ -68,7 +111,7 @@ export class GraphQLClient {
         if (!this.connected) {
           reject(new Error('Connection timeout'));
         }
-      }, 5000).unref();
+      }, CONNECTION_TIMEOUT).unref();
     });
   }
 
@@ -168,6 +211,84 @@ export class GraphQLClient {
     }
   }
 
+  startHeartbeat() {
+    // Clear any existing heartbeat
+    this.stopHeartbeat();
+
+    // Send ping every 30 seconds
+    this.heartbeatInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        if (DEBUG) {
+          console.log('💗 Sending ping to server');
+        }
+        this.ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, HEARTBEAT_INTERVAL);
+  }
+
+  stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  async attemptReconnect() {
+    this.reconnectAttempts++;
+    const delay = Math.min(
+      this.reconnectDelay * 2 ** (this.reconnectAttempts - 1),
+      MAX_RECONNECT_DELAY,
+    );
+
+    if (DEBUG) {
+      console.log(
+        `🔄 Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms...`,
+      );
+    }
+
+    setTimeout(async () => {
+      try {
+        await this.connect();
+
+        // Re-subscribe to existing subscriptions with resume logic
+        if (this.messageHandlers.length > 0) {
+          if (DEBUG) {
+            console.log('🔄 Resuming subscription...');
+          }
+          this.subscribeWithResume();
+        }
+      } catch (error) {
+        console.error(
+          `❌ Reconnection attempt ${this.reconnectAttempts} failed:`,
+          error.message,
+        );
+
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.attemptReconnect();
+        } else {
+          console.error(
+            '❌ Max reconnection attempts reached. Please reconnect manually.',
+          );
+        }
+      }
+    }, delay);
+  }
+
+  subscribeWithResume() {
+    if (this.messageHandlers.length > 0 && this.connected) {
+      // Clear existing subscriptions first
+      this.subscriptions.clear();
+
+      // Use the last received message ID for resume
+      const resumeId = this.lastMessageId;
+
+      // Re-subscribe with all handlers (though typically there's one)
+      this.messageHandlers.forEach((handler) => {
+        this.subscribe(handler, resumeId);
+      });
+    }
+  }
+
   unsubscribe(subscriptionId) {
     if (this.subscriptions.has(subscriptionId)) {
       this.ws.send(
@@ -184,14 +305,15 @@ export class GraphQLClient {
   }
 
   disconnect() {
+    this.shouldReconnect = false; // Disable auto-reconnection
+    this.stopHeartbeat();
+
     if (this.ws) {
       this.ws.close();
       this.connected = false;
       this.subscriptions.clear();
       this.messageHandlers = [];
-      if (DEBUG) {
-        console.log('👋 Disconnected from GraphQL server');
-      }
+      console.log('👋 Disconnected from GraphQL server');
     }
   }
 }
