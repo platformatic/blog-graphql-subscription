@@ -35,11 +35,13 @@ pnpm install
 The main demo that simulates massive traffic with an unstable server to test subscription reliability and message delivery under adverse conditions.
 
 **Features:**
-- Simulates server instability and crashes, tricking the connection
-- Massive message throughput testing
-- Detailed delivery statistics and analysis
+- Simulates server instability and crashes with automatic restarts
+- Massive message throughput testing with configurable burst patterns
+- Detailed per-client and overall delivery statistics
 - Proxy server with resumption capabilities
-- Message loss detection and reporting
+- Message loss detection and duplicate message tracking
+- Real-time message delivery rate analysis
+- Graceful shutdown handling
 
 **Run the demo:**
 ```bash
@@ -50,30 +52,30 @@ node src/demo.js
 
 ```bash
 # Basic configuration
-CLIENTS=10 DURATION=30000 node src/demo.js
+CLIENTS=10 MESSAGES=2000 node src/demo.js
 
 # Massive traffic simulation
-CLIENTS=20 MESSAGES=5000 DURATION=60000 node src/demo.js
+CLIENTS=20 MESSAGES=5000 MESSAGES_PER_BURST=500 node src/demo.js
 
-# With server problems (chance of issues: 0.0-1.0)
-SUBSCRIPTION_PROBLEM_CHANCE=0.1 CLIENTS=5 DURATION=20000 node src/demo.js
+# High-throughput testing with custom burst settings
+CLIENTS=15 MESSAGES=10000 MESSAGES_PER_BURST=200 BURST_PAUSE=100 node src/demo.js
 
-# High-throughput testing
-CLIENTS=15 MESSAGES=10000 MESSAGES_PER_BURST=200 BURST_PAUSE=50 DURATION=45000 node src/demo.js
+# Longer wait time for message delivery
+MAX_WAIT_TIME=180000 CLIENTS=5 MESSAGES=1000 node src/demo.js
 
 # Enable debug output
-DEBUG=true CLIENTS=3 DURATION=10000 node src/demo.js
+DEBUG=true CLIENTS=3 MESSAGES=500 node src/demo.js
 ```
 
 **Available environment variables:**
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CLIENTS` | 5 | Number of concurrent clients |
-| `MESSAGES` | 1000 | Total messages to send during the demo |
-| `DURATION` | 30000 | Demo duration in milliseconds |
-| `MESSAGES_PER_BURST` | 100 | Messages sent per burst interval |
-| `BURST_PAUSE` | 100 | Pause between bursts in milliseconds |
+| `CLIENTS` | 10 | Number of concurrent clients |
+| `MESSAGES` | 2000 | Total messages to send during the demo |
+| `MAX_WAIT_TIME` | 120000 | Maximum time to wait for message delivery (ms) |
+| `MESSAGES_PER_BURST` | 250 | Messages sent per burst interval |
+| `BURST_PAUSE` | 500 | Pause between bursts in milliseconds |
 | `PROXY_PORT` | 3001 | Port for the proxy server |
 | `SUBSCRIPTION_PROBLEM_CHANCE` | 0 | Chance of server problems (0.0-1.0) |
 | `DEBUG` | false | Enable detailed debug logging |
@@ -118,8 +120,9 @@ The main demo provides detailed statistics including:
 
 2. **High message loss**:
    - Lower the number of `CLIENTS`. Since the message delivery is broadcasting, adding clients increase exponentially the workload
-   - Reduce `SUBSCRIPTION_PROBLEM_CHANCE`
    - Increase `BURST_PAUSE` for less aggressive traffic
+   - Reduce `MESSAGES_PER_BURST` to send smaller batches
+   - Increase `MAX_WAIT_TIME` to allow more time for message delivery
 
 ### Performance Tips
 
