@@ -1,4 +1,3 @@
-import { setTimeout as wait } from 'node:timers/promises';
 import fastifyHttpProxy from '@fastify/http-proxy';
 import { StatefulSubscriptions } from '@platformatic/graphql-subscriptions-resume';
 import fastify from 'fastify';
@@ -14,131 +13,76 @@ const state = new StatefulSubscriptions({
   subscriptions: [{ name: 'onMessage', key: 'id' }],
 });
 
-let backup = [];
-let lastPong = Date.now();
-
-// resend messages from last ping
-// it may send messages more than once
-// in case the target already received messages between last ping and the reconnection
-async function resendMessages(target) {
-  const now = Date.now();
-  const messagesToResend = backup.filter(
-    (m) => m.timestamp > lastPong && m.timestamp <= now,
-  );
-
-  if (messagesToResend.length === 0) {
-    if (DEBUG) {
-      console.log('[PROXY] 📦 No messages to resend from backup');
-    }
-    return;
-  }
-
-  console.log(
-    `[PROXY] 📦 Resending ${messagesToResend.length} messages from backup (since last pong: ${new Date(lastPong).toISOString()})`,
-  );
-
-  for (const m of messagesToResend) {
-    if (DEBUG) {
-      console.log(
-        `[PROXY] 📤 Resending message from ${new Date(m.timestamp).toISOString()}:`,
-        JSON.stringify(JSON.parse(m.message), null, 2),
-      );
-    }
-    target.send(m.message);
-    // introduce a small delay to avoid to flood the target
-    await wait(250);
-  }
-
-  if (DEBUG) {
-    console.log(
-      `[PROXY] ✅ Finished resending ${messagesToResend.length} messages`,
-    );
-  }
-}
-
 const wsHooks = {
   onConnect: (_context, source, _target) => {
-    const timestamp = new Date().toISOString();
-    console.log(
-      `[PROXY] 🔌 [${timestamp}] Client connected (clientId: ${source.clientId || 'pending'})`,
-    );
+    if (DEBUG) {
+      const timestamp = new Date().toISOString();
+      console.log(
+        `[PROXY] 🔌 [${timestamp}] Client connected (clientId: ${source.id || 'pending'})`,
+      );
+    }
   },
 
   onDisconnect: (_context, source, _target) => {
     const timestamp = new Date().toISOString();
-    const backupCount = backup.length;
 
     if (DEBUG) {
       console.log(
-        `[PROXY] 🔌❌ [${timestamp}] Client disconnected (clientId: ${source.clientId})`,
+        `[PROXY] 🔌❌ [${timestamp}] Client disconnected (clientId: ${source.id})`,
       );
-      console.log(`[PROXY]   📦 Messages in backup: ${backupCount}`);
     }
 
-    state.removeAllSubscriptions(source.clientId);
-    // Clear backup on disconnect
-    backup.length = 0;
+    state.removeAllSubscriptions(source.id);
     if (DEBUG) {
       console.log(
-        `[PROXY]   🗑️  Cleared ${backupCount} messages from backup and removed all subscriptions`,
+        `[PROXY]   🗑️  Removed all subscriptions for client ${source.id}`,
       );
     }
   },
 
   onReconnect: (_context, source, target) => {
+    // don't reconnect if the demo is done
+    if (process.env.DONE) {
+      return;
+    }
     const timestamp = new Date().toISOString();
-    const backupCount = backup.length;
-    const timeSinceLastPong = Date.now() - lastPong;
 
     console.log(
-      `[PROXY] 🔌🔄 [${timestamp}] Client reconnecting (clientId: ${source.clientId})`,
+      `[PROXY] 🔌🔄 [${timestamp}] Client reconnecting (clientId: ${source.id})`,
     );
-    console.log(`[PROXY]   📦 Messages in backup: ${backupCount}`);
-    console.log(`[PROXY]   ⏱️  Time since last pong: ${timeSinceLastPong}ms`);
 
     console.log('[PROXY] 🔌🔄 onReconnect', {
-      clientId: source.clientId,
+      clientId: source.id,
       timestamp,
-      backupCount,
-      timeSinceLastPong,
     });
 
-    state.restoreSubscriptions(source.clientId, target);
-
-    console.log(`[PROXY]   📤 Starting message resend process...`);
-    // Resend messages from backup
-    resendMessages(target);
+    state.restoreSubscriptions(source.id, target);
   },
 
   onIncomingMessage: (_context, source, _target, message) => {
     const m = JSON.parse(message.data.toString('utf-8'));
     const timestamp = new Date().toISOString();
-    source.clientId = m.id;
+    if (!source.id) {
+      source.id = m.id || randomUUID();
+    }
 
     if (m.type !== 'start') {
       return;
     }
 
-    // Backup incoming messages for potential resend
-    backup.push({ message: message.data.toString(), timestamp: Date.now() });
-
     if (DEBUG) {
       console.log('[PROXY] 📤 Adding subscription', {
-        clientId: source.clientId,
+        clientId: source.id,
         query: m.payload.query,
         variables: m.payload.variables,
       });
     }
 
     try {
-      state.addSubscription(
-        source.clientId,
-        m.payload.query,
-        m.payload.variables,
-      );
+      state.addSubscription(source.id, m.payload.query, m.payload.variables);
     } catch (err) {
       console.error(
-        { err, m, clientId: source.clientId, timestamp },
+        { err, m, clientId: source.id, timestamp },
         '❌ Error adding subscription',
       );
     }
@@ -151,43 +95,22 @@ const wsHooks = {
     if (m.type === 'data') {
       if (DEBUG) {
         console.log('[PROXY] 📤 Updating subscription state', {
-          clientId: source.clientId,
+          clientId: source.id,
           data: m.payload.data,
         });
       }
-      state.updateSubscriptionState(source.clientId, m.payload.data);
+      state.updateSubscriptionState(source.id, m.payload.data);
     } else if (m.type === 'error') {
-      console.log(
-        `[PROXY] 📤❌ [${timestamp}] Outgoing error to client ${source.clientId}:`,
-        m.payload,
-      );
+      if (DEBUG) {
+        console.log(
+          `[PROXY] 📤❌ [${timestamp}] Outgoing error to client ${source.id}:`,
+          m.payload,
+        );
+      }
     } else if (m.type === 'complete') {
-      state.removeSubscription(source.clientId);
+      state.removeSubscription(source.id);
       console.log(
-        `[PROXY] 📤✅ [${timestamp}] Subscription completed for client ${source.clientId}`,
-      );
-    }
-  },
-
-  onPong: () => {
-    const previousPong = lastPong;
-    lastPong = Date.now();
-    const oldBackupCount = backup.length;
-
-    // clean backup from the last ping
-    backup = backup.filter((message) => message.timestamp > lastPong);
-    const newBackupCount = backup.length;
-    const cleaned = oldBackupCount - newBackupCount;
-
-    if (DEBUG) {
-      console.log(
-        `[PROXY] 🏓 [${new Date().toISOString()}] Received pong - heartbeat successful`,
-      );
-      console.log(
-        `[PROXY]   ⏱️  Time since previous pong: ${lastPong - previousPong}ms`,
-      );
-      console.log(
-        `[PROXY]   📦 Cleaned ${cleaned} old messages from backup (${newBackupCount} remaining)`,
+        `[PROXY] 📤✅ [${timestamp}] Subscription completed for client ${source.id}`,
       );
     }
   },

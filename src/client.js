@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import WebSocket from 'ws';
 
 const DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
@@ -91,9 +92,11 @@ export class GraphQLClient {
       });
 
       this.ws.on('close', (code, reason) => {
-        console.log(
-          `🔴 Disconnected from server (code: ${code}, reason: ${reason})`,
-        );
+        if (DEBUG) {
+          console.log(
+            `🔴 Disconnected from server (code: ${code}, reason: ${reason})`,
+          );
+        }
         this.connected = false;
         this.stopHeartbeat();
 
@@ -246,32 +249,36 @@ export class GraphQLClient {
       );
     }
 
-    setTimeout(async () => {
-      try {
-        await this.connect();
+    await sleep(delay);
 
-        // Re-subscribe to existing subscriptions with resume logic
-        if (this.messageHandlers.length > 0) {
-          if (DEBUG) {
-            console.log('🔄 Resuming subscription...');
-          }
-          this.subscribeWithResume();
-        }
-      } catch (error) {
-        console.error(
-          `❌ Reconnection attempt ${this.reconnectAttempts} failed:`,
-          error.message,
-        );
+    if (!this.shouldReconnect) {
+      return;
+    }
 
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-          this.attemptReconnect();
-        } else {
-          console.error(
-            '❌ Max reconnection attempts reached. Please reconnect manually.',
-          );
+    try {
+      await this.connect();
+
+      // Re-subscribe to existing subscriptions with resume logic
+      if (this.messageHandlers.length > 0) {
+        if (DEBUG) {
+          console.log('🔄 Resuming subscription...');
         }
+        this.subscribeWithResume();
       }
-    }, delay);
+    } catch (error) {
+      console.error(
+        `❌ Reconnection attempt ${this.reconnectAttempts} failed:`,
+        error.message,
+      );
+
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.attemptReconnect();
+      } else {
+        console.error(
+          '❌ Max reconnection attempts reached. Please reconnect manually.',
+        );
+      }
+    }
   }
 
   subscribeWithResume() {
@@ -313,7 +320,10 @@ export class GraphQLClient {
       this.connected = false;
       this.subscriptions.clear();
       this.messageHandlers = [];
-      console.log('👋 Disconnected from GraphQL server');
+      if (DEBUG) {
+        console.log('👋 Disconnected from GraphQL server');
+      }
+      this.ws = null;
     }
   }
 }

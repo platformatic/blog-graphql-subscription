@@ -191,16 +191,24 @@ class Pubsub {
     const startIndex = storage.messages.findIndex((msg) => msg.id === id);
 
     if (startIndex !== -1) {
-      console.log(
-        '[GRAPHQL SERVER] 🚨 Starting from message id',
-        id,
-        startIndex,
-      );
       const messagesToSend = storage.messages.slice(startIndex + 1);
+      console.log('[GRAPHQL SERVER] 🚨 Starting from message id', {
+        id,
+        index: startIndex,
+        count: messagesToSend.length,
+      });
       for (const message of messagesToSend) {
         // no delay on resend
         if (DEBUG) {
-          console.log('[GRAPHQL SERVER] 🚨 Resending message', message);
+          console.log('[GRAPHQL SERVER] 🚨 Resending message', {
+            onMessage: message,
+          });
+        }
+        if (!message) {
+          console.error('[GRAPHQL SERVER] 🚨 Message is undefined', {
+            message,
+          });
+          continue;
         }
         queue.push({ onMessage: message });
       }

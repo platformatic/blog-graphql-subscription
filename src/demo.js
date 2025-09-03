@@ -8,11 +8,11 @@ const DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
 
 const PROXY_PORT = parseInt(process.env.PROXY_PORT, 10) || 3001;
 
-const CLIENTS = parseInt(process.env.CLIENTS, 10) || 5;
-const MESSAGES = parseInt(process.env.MESSAGES, 10) || 1_000; // Total messages to send
-const DURATION = parseInt(process.env.DURATION, 10) || 30_000;
-const MESSAGES_PER_BURST = parseInt(process.env.MESSAGES_PER_BURST, 10) || 100; // Send multiple messages per interval
-const BURST_PAUSE = parseInt(process.env.BURST_PAUSE, 10) || 100;
+const CLIENTS = parseInt(process.env.CLIENTS, 10) || 10;
+const MESSAGES = parseInt(process.env.MESSAGES, 10) || 2_000; // Total messages to send
+const MAX_WAIT_TIME = parseInt(process.env.MAX_WAIT_TIME, 10) || 120_000;
+const MESSAGES_PER_BURST = parseInt(process.env.MESSAGES_PER_BURST, 10) || 250;
+const BURST_PAUSE = parseInt(process.env.BURST_PAUSE, 10) || 500;
 
 const messages = [
   'Banana!',
@@ -67,14 +67,15 @@ function groupConsecutiveNumbers(numbers) {
   return intervals;
 }
 
+// In this demo, a client has only one subscription
 class ClientTracker {
   constructor(clientId) {
     this.clientId = clientId;
+    this.subscriptionId = null;
     this.sentMessages = [];
     this.receivedMessages = [];
     this.lastReceivedMessageId = null;
     this.client = null;
-    this.subscriptionId = null;
     this.isConnected = false;
   }
 
@@ -197,6 +198,27 @@ async function createMassiveTraffic(clients) {
   console.log(`✅ Sent ${MESSAGES} messages`);
 }
 
+async function checkAllClientsReceivedMessages(clients) {
+  const checkInterval = 2_000; // Check every 1 second
+  const startTime = Date.now();
+
+  let clientsDone = 0;
+  while (
+    clientsDone !== clients.length &&
+    Date.now() - startTime < MAX_WAIT_TIME
+  ) {
+    for (const client of clients) {
+      if (client.receivedMessages.length === MESSAGES) {
+        clientsDone++;
+      }
+    }
+
+    if (clientsDone !== clients.length) {
+      await sleep(checkInterval);
+    }
+  }
+}
+
 function printDetailedStats(clients) {
   console.log('\n📊 ======================================');
   console.log('📊 DETAILED MESSAGE DELIVERY STATISTICS');
@@ -263,8 +285,9 @@ function printDetailedStats(clients) {
   console.log('═══════════════════════════════════════');
 
   console.log(`\n🕐 Runtime: ${totalRunTime.toFixed(1)}s`);
+  console.log(`📊 Sent Messages: ${globalStats.sentMessages.length}`);
   console.log(
-    `📊 Overall Delivery Rate: ${overallDeliveryRate}% ${overallDeliveryRate === '100.00' ? '✅' : '❌'}`,
+    `📊 Delivery Rate: ${overallDeliveryRate}% ${overallDeliveryRate === '100.00' ? '✅' : '❌'}`,
   );
   console.log(
     `📊 Duplicated Messages: ${globalStats.duplicatedMessages.length} ${globalStats.duplicatedMessages.length > 0 ? '❌' : '✅'}`,
@@ -340,16 +363,15 @@ async function runMassiveTrafficDemo() {
     `🔥 Sending ${MESSAGES} messages, ${MESSAGES_PER_BURST} messages every ${BURST_PAUSE}ms`,
   );
 
-  // Wait for all clients to be connected
-  await sleep(1000);
+  // Wait for all clients to be subscribed
+  while (clients.some((client) => !client.subscriptionId)) {
+    await sleep(100);
+  }
 
   createMassiveTraffic(clients);
-
-  // Run for specified duration
-  console.log(
-    `⏰ Demo will run for ${DURATION / 1000} seconds with massive traffic...\n`,
-  );
-  await sleep(DURATION);
+  // Wait for all clients to receive all messages
+  await checkAllClientsReceivedMessages(clients);
+  process.env.DONE = 'true';
 
   // Clean up
   console.log('\n5️⃣ Cleaning up...');
