@@ -23,7 +23,27 @@ const TRIGGER_PROBLEM_MAX = process.env.TRIGGER_PROBLEM_MAX
   ? parseInt(process.env.TRIGGER_PROBLEM_MAX, 10)
   : 5_000;
 
-const problems = ['unresponsive', 'close_connection', 'break_connection'];
+const possibleProblems = ['unresponsive', 'close_connection', 'break_connection'];
+
+let problems = possibleProblems;
+if (process.env.SUBSCRIPTION_PROBLEMS) {
+  problems = process.env.SUBSCRIPTION_PROBLEMS.split(',').map((p) => p.trim());
+  // validate problems
+  problems = problems.filter((p) => possibleProblems.includes(p));
+  if (!problems.length) {
+    throw new Error('No valid subscription problems configured, found: ' + process.env.SUBSCRIPTION_PROBLEMS);
+  }
+}
+
+console.log('[GRAPHQL SERVER] ⚠️  Unstable server configuration:', {
+  SUBSCRIPTION_PROBLEM_CHANCE,
+  MESSAGE_DELAY,
+  TRIGGER_PROBLEM_MIN,
+  TRIGGER_PROBLEM_MAX,
+  problems,
+});
+
+
 const subscriptionProblems = {};
 let problemIndex = 0;
 function scheduleSubscriptionProblem(subscriptionId) {
@@ -142,6 +162,7 @@ class Pubsub {
     const subscriptionId = context.id || randomUUID();
     // Schedule potential problems for this specific subscription
     const problem = scheduleSubscriptionProblem(subscriptionId);
+    console.log('[GRAPHQL SERVER] 🚨 New subscription', { subscriptionId, topic, id, problem })
 
     // dont respond to ping if the subscription became unresponsive
     context.ws.on('ping', () => {
