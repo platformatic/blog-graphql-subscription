@@ -14,12 +14,18 @@ importers:
       '@fastify/http-proxy':
         specifier: ^11.3.0
         version: 11.3.0
+      '@platformatic/graphql-subscriptions-resume':
+        specifier: ^0.1.0
+        version: 0.1.2
       fastify:
         specifier: ^5.5.0
         version: 5.5.0
       mercurius:
         specifier: ^16.2.0
         version: 16.2.0(graphql@16.11.0)
+      ws:
+        specifier: ^8.18.3
+        version: 8.18.3
 
 packages:
 
@@ -136,6 +142,10 @@ packages:
     resolution: {integrity: sha512-9I2Zn6+NJLfaGoz9jN3lpwDgAYvfGeNYdbAIjJOqzs4Tpc+VU3Jqq4IofSUBKajiDS8k9fZIg18/z13mpk1bsA==}
     engines: {node: '>=8'}
 
+  '@platformatic/graphql-subscriptions-resume@0.1.2':
+    resolution: {integrity: sha512-pxxroOvTHVMz6pUkEvWywBd9cTLMet5xU5Zzh+mDlAbVjjeyvguly/l6lSH6CkYoTYFtnis4HwWV21MXQRRq9Q==}
+    engines: {node: '>=20.0.0'}
+
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
     engines: {node: '>=6.5'}
@@ -190,6 +200,10 @@ packages:
   clean-stack@2.2.0:
     resolution: {integrity: sha512-4diC9HaTE+KRAMWhDhrGOECgWZxoevMc5TlkObMqNSsVU62PYzXZ/SMTjzyGAFF1YusgxGcSWTEXBhp0CPwQ1A==}
     engines: {node: '>=6'}
+
+  cleaner-spec-reporter@0.5.0:
+    resolution: {integrity: sha512-YOVxazH6MhVev7P/E6aw8cUAm757t83ELBHpo7cehGfIkReln3CH49zbJ7OMbDuqdvfDgeafXvS2OfvbJUmL2g==}
+    engines: {node: '>= 20.18.0'}
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -731,6 +745,13 @@ snapshots:
 
   '@lukeed/ms@2.0.2': {}
 
+  '@platformatic/graphql-subscriptions-resume@0.1.2':
+    dependencies:
+      abstract-logging: 2.0.1
+      cleaner-spec-reporter: 0.5.0
+      graphql: 16.11.0
+      pino: 9.9.0
+
   abort-controller@3.0.0:
     dependencies:
       event-target-shim: 5.0.1
@@ -778,6 +799,8 @@ snapshots:
       ieee754: 1.2.1
 
   clean-stack@2.2.0: {}
+
+  cleaner-spec-reporter@0.5.0: {}
 
   color-convert@2.0.1:
     dependencies:
