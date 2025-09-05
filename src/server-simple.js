@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import mercurius from 'mercurius';
+import esMain from 'es-main';
 
 const app = Fastify();
 
@@ -81,4 +82,9 @@ export async function start() {
 
 export async function stop() {
   await app.close();
+}
+
+// Auto-start when run directly
+if (esMain(import.meta)) {
+  start();
 }

@@ -4,6 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import fastifyWebsocket from '@fastify/websocket';
 import Fastify from 'fastify';
 import mercurius from 'mercurius';
+import esMain from 'es-main';
 
 const DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
 
@@ -386,7 +387,7 @@ export async function stop() {
   await app.close();
 }
 
-if (process.env.RUN === 'true' || process.env.RUN === '1') {
+if (esMain(import.meta)) {
   start();
 }
 

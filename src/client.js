@@ -75,11 +75,6 @@ export class GraphQLClient {
         } else if (msg.type === 'error') {
           console.error('❌ GraphQL error:', msg.payload);
           reject(new Error(msg.payload));
-        } else if (msg.type === 'pong') {
-          // Handle pong response from heartbeat
-          if (DEBUG) {
-            console.log('💗 Received pong from server');
-          }
         }
       });
 
@@ -218,13 +213,14 @@ export class GraphQLClient {
     // Clear any existing heartbeat
     this.stopHeartbeat();
 
-    // Send ping every 30 seconds
+    // Use WebSocket-level ping instead of GraphQL-WS protocol ping
     this.heartbeatInterval = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         if (DEBUG) {
-          console.log('💗 Sending ping to server');
+          console.log('💗 Sending WebSocket ping to server');
         }
-        this.ws.send(JSON.stringify({ type: 'ping' }));
+        // Use WebSocket ping instead of GraphQL message
+        this.ws.ping();
       }
     }, HEARTBEAT_INTERVAL);
   }
