@@ -1,7 +1,6 @@
-import { setTimeout as sleep } from 'node:timers/promises';
 import { GraphQLClient } from './client.js';
 
-const DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
+const _DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
 
 async function createClient(clientId) {
   const client = new GraphQLClient('ws://localhost:4000/graphql', clientId);
@@ -51,9 +50,11 @@ async function runClient() {
   // Create a single client
   console.log('1️⃣ Creating client...');
   const clientWrapper = await createClient(clientId);
-  
+
   if (!clientWrapper) {
-    console.error('❌ Failed to create client. Make sure the server is running.');
+    console.error(
+      '❌ Failed to create client. Make sure the server is running.',
+    );
     process.exit(1);
   }
 
@@ -70,7 +71,7 @@ async function runClient() {
 
   process.stdin.on('data', async (data) => {
     const input = data.toString().trim();
-    
+
     if (input === 'quit' || input === 'exit') {
       console.log('\n3️⃣ Disconnecting client...');
       client.disconnect();

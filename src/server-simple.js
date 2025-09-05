@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import esMain from 'es-main';
 import Fastify from 'fastify';
 import mercurius from 'mercurius';
-import esMain from 'es-main';
 
 const app = Fastify();
 

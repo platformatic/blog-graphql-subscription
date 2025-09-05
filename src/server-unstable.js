@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { setTimeout as sleep } from 'node:timers/promises';
 import fastifyWebsocket from '@fastify/websocket';
+import esMain from 'es-main';
 import Fastify from 'fastify';
 import mercurius from 'mercurius';
-import esMain from 'es-main';
 
 const DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
 
@@ -23,7 +23,11 @@ const TRIGGER_PROBLEM_MAX = process.env.TRIGGER_PROBLEM_MAX
   ? parseInt(process.env.TRIGGER_PROBLEM_MAX, 10)
   : 5_000;
 
-const possibleProblems = ['unresponsive', 'close_connection', 'break_connection'];
+const possibleProblems = [
+  'unresponsive',
+  'close_connection',
+  'break_connection',
+];
 
 let problems = possibleProblems;
 if (process.env.SUBSCRIPTION_PROBLEMS) {
@@ -31,7 +35,9 @@ if (process.env.SUBSCRIPTION_PROBLEMS) {
   // validate problems
   problems = problems.filter((p) => possibleProblems.includes(p));
   if (!problems.length) {
-    throw new Error('No valid subscription problems configured, found: ' + process.env.SUBSCRIPTION_PROBLEMS);
+    throw new Error(
+      `No valid subscription problems configured, found: ${process.env.SUBSCRIPTION_PROBLEMS}`,
+    );
   }
 }
 
@@ -42,7 +48,6 @@ console.log('[GRAPHQL SERVER] ⚠️  Unstable server configuration:', {
   TRIGGER_PROBLEM_MAX,
   problems,
 });
-
 
 const subscriptionProblems = {};
 let problemIndex = 0;
@@ -162,7 +167,12 @@ class Pubsub {
     const subscriptionId = context.id || randomUUID();
     // Schedule potential problems for this specific subscription
     const problem = scheduleSubscriptionProblem(subscriptionId);
-    console.log('[GRAPHQL SERVER] 🚨 New subscription', { subscriptionId, topic, id, problem })
+    console.log('[GRAPHQL SERVER] 🚨 New subscription', {
+      subscriptionId,
+      topic,
+      id,
+      problem,
+    });
 
     // dont respond to ping if the subscription became unresponsive
     context.ws.on('ping', () => {
