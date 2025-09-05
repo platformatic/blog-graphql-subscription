@@ -8,10 +8,17 @@
     "type": "git",
     "url": "git+https://github.com/platformatic/blog-graphql-subscription.git"
   },
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
+  },
   "dependencies": {
     "@biomejs/biome": "^2.2.2",
     "@fastify/http-proxy": "^11.3.0",
+    "@fastify/websocket": "^11.2.0",
     "@platformatic/graphql-subscriptions-resume": "^0.1.0",
+    "es-main": "^1.4.0",
     "fastify": "^5.5.0",
     "mercurius": "^16.2.0",
     "ws": "^8.18.3"
