@@ -203,7 +203,9 @@ export class GraphQLClient {
         throw new Error(result.errors[0].message);
       }
 
-      console.log('✅ Message sent:', result.data.sendMessage);
+      if (DEBUG) {
+        console.log('✅ Message sent:', result.data.sendMessage);
+      }
 
       return result.data.sendMessage;
     } catch (error) {

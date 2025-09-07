@@ -5,10 +5,13 @@ This repository demonstrates GraphQL subscriptions with different scenarios incl
 ## Features
 
 - **Simple Subscriptions**: Basic GraphQL subscription implementation
+- **Interactive Client Demo**: Command-line interface for manual message testing
 - **Proxy Subscriptions**: Subscriptions through a proxy with resumption capabilities  
 - **Massive Traffic Simulation**: High-load testing with unstable server conditions
+- **Enhanced Client Reliability**: Single subscription per client with improved reconnection
 - **Subscription Resumption**: Automatic reconnection and message recovery
 - **Real-time Statistics**: Detailed delivery and performance metrics
+- **Improved Tooling**: Built-in code formatting and linting with npm scripts
 
 ## Prerequisites
 
@@ -131,18 +134,64 @@ The main demo provides detailed statistics including:
 - Monitor system resources during high-load tests
 - Adjust burst settings based on system capabilities
 
+## Simple Client Demo
+
+In addition to the massive traffic simulation, there's also a simple interactive client demo:
+
+```bash
+# Run the simple interactive client demo
+node src/demo-client-simple.js
+```
+
+**Features:**
+- Interactive command-line interface for sending messages
+- Real-time message display with timestamps
+- Manual message sending via keyboard input
+- Optional message tracking and resumption capabilities
+
+**Usage:**
+1. Start the server: `node src/server-simple.js` 
+2. In another terminal, run: `node src/demo-client-simple.js`
+3. Type messages and press Enter to send them
+4. Type `quit` or `exit` to disconnect gracefully
+
+**Configuration options:**
+```bash
+# Enable message tracking for resumption capabilities  
+TRACK_LAST_MESSAGE=true node src/demo-client-simple.js
+
+# Enable debug output
+DEBUG=true node src/demo-client-simple.js
+```
+
+## Code Formatting and Linting
+
+This project includes npm scripts for code formatting and linting:
+
+```bash
+# Format code using Biome
+npm run format
+
+# Check and fix linting issues
+npm run lint:fix
+
+# Check code (without fixing)
+npm run lint
+```
+
 ## Project Structure
 
 ```
 src/
 ├── demo.js              # Main massive traffic demo
 ├── demo-simple.js       # Simple subscription demo
+├── demo-client-simple.js # Interactive client demo (NEW)
 ├── demo-proxy.js        # Proxy subscription demo
-├── client.js            # GraphQL client implementation
+├── client.js            # Enhanced GraphQL client implementation
 ├── client-with-resume.js # Client with resumption capabilities
 ├── proxy.js             # Proxy server implementation
-├── server-simple.js     # Basic GraphQL server
-├── server-unstable.js   # Unstable server for testing
+├── server-simple.js     # Basic GraphQL server with auto-start
+├── server-unstable.js   # Enhanced unstable server for testing
 └── server-with-resume.js # Server with resumption support
 ```
 
