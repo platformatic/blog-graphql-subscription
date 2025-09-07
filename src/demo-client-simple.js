@@ -3,7 +3,9 @@ import { GraphQLClient } from './client.js';
 const _DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
 
 async function createClient(clientId, trackLastMessage) {
-  const client = new GraphQLClient('ws://localhost:4000/graphql', clientId, trackLastMessage);
+  const port = process.env.PORT || '4000';
+  const url = `ws://localhost:${port}/graphql`;
+  const client = new GraphQLClient(url, clientId, trackLastMessage);
 
   try {
     await client.connect();
@@ -40,9 +42,13 @@ async function sendMessage(client, clientId, text) {
 }
 
 async function runClient() {
+  const port = process.env.PORT || '4000';
+  
   console.log('🚀 Starting Simple GraphQL Client Demo');
   console.log('=====================================');
-  console.log('Make sure the server is running: node src/server-simple.js');
+  console.log(`Make sure the server is running on port ${port}`);
+  console.log(`Server: node src/server-simple.js (default port 4000)`);
+  console.log(`Client connecting to: ws://localhost:${port}/graphql`);
   console.log('=====================================\n');
 
   const clientId = process.pid;

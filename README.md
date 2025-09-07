@@ -160,8 +160,14 @@ node src/demo-client-simple.js
 # Enable message tracking for resumption capabilities  
 TRACK_LAST_MESSAGE=true node src/demo-client-simple.js
 
+# Connect to custom port
+PORT=3000 node src/demo-client-simple.js
+
 # Enable debug output
 DEBUG=true node src/demo-client-simple.js
+
+# Combined options
+PORT=5000 DEBUG=true TRACK_LAST_MESSAGE=true node src/demo-client-simple.js
 ```
 
 ## Code Formatting and Linting
@@ -189,7 +195,7 @@ src/
 ├── demo-proxy.js        # Proxy subscription demo
 ├── client.js            # Enhanced GraphQL client implementation
 ├── client-with-resume.js # Client with resumption capabilities
-├── proxy.js             # Proxy server implementation
+├── proxy.js             # Proxy server with auto-start capability
 ├── server-simple.js     # Basic GraphQL server with auto-start
 ├── server-unstable.js   # Enhanced unstable server for testing
 └── server-with-resume.js # Server with resumption support

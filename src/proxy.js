@@ -1,5 +1,6 @@
 import fastifyHttpProxy from '@fastify/http-proxy';
 import { StatefulSubscriptions } from '@platformatic/graphql-subscriptions-resume';
+import esMain from 'es-main';
 import fastify from 'fastify';
 
 const DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
@@ -155,4 +156,9 @@ export async function stop() {
     await app.close();
     app = null;
   }
+}
+
+// Auto-start when run directly
+if (esMain(import.meta)) {
+  start();
 }
