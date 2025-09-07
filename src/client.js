@@ -12,7 +12,7 @@ const MAX_RECONNECT_DELAY = 30_000; // 30 seconds
 
 // For the demo purpose, the client can handle only one subscription at a time.
 export class GraphQLClient {
-  constructor(url = 'ws://localhost:4000/graphql', clientId = null) {
+  constructor(url = 'ws://localhost:4000/graphql', clientId = null, trackLastMessage = true) {
     this.url = url;
     this.httpUrl = this.url
       .replace('ws://', 'http://')
@@ -25,6 +25,7 @@ export class GraphQLClient {
     this.lastMessageId = null;
     this.heartbeatInterval = null;
     this.reconnectAttempts = 0;
+    this.trackLastMessage = trackLastMessage;
     this.maxReconnectAttempts = MAX_RECONNECT_ATTEMPTS;
     this.reconnectDelay = INITIAL_RECONNECT_DELAY;
     this.shouldReconnect = true;
@@ -67,7 +68,7 @@ export class GraphQLClient {
           const message = msg.payload.data.onMessage;
 
           // Track the last received message ID for resume functionality
-          if (message.id) {
+          if (message.id && this.trackLastMessage) {
             this.lastMessageId = message.id;
           }
 
@@ -173,10 +174,6 @@ export class GraphQLClient {
   }
 
   async sendMessage(user, text) {
-    if (!this.connected) {
-      throw new Error('Not connected to server');
-    }
-
     const mutation = `
       mutation SendMessage($text: String!, $user: String!) {
         sendMessage(text: $text, user: $user) {
@@ -205,6 +202,8 @@ export class GraphQLClient {
       if (result.errors) {
         throw new Error(result.errors[0].message);
       }
+
+      console.log('✅ Message sent:', result.data.sendMessage);
 
       return result.data.sendMessage;
     } catch (error) {

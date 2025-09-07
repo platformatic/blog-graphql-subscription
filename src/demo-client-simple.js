@@ -2,8 +2,8 @@ import { GraphQLClient } from './client.js';
 
 const _DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
 
-async function createClient(clientId) {
-  const client = new GraphQLClient('ws://localhost:4000/graphql', clientId);
+async function createClient(clientId, trackLastMessage) {
+  const client = new GraphQLClient('ws://localhost:4000/graphql', clientId, trackLastMessage);
 
   try {
     await client.connect();
@@ -47,9 +47,11 @@ async function runClient() {
 
   const clientId = process.pid;
 
+  const trackLastMessage = process.env.TRACK_LAST_MESSAGE === 'true' || process.env.TRACK_LAST_MESSAGE === '1';
+
   // Create a single client
   console.log('1️⃣ Creating client...');
-  const clientWrapper = await createClient(clientId);
+  const clientWrapper = await createClient(clientId, trackLastMessage);
 
   if (!clientWrapper) {
     console.error(
