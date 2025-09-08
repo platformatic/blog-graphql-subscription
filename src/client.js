@@ -4,24 +4,28 @@ import WebSocket from 'ws';
 const DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
 
 // Connection and retry constants
-const CONNECTION_TIMEOUT = 5000; // 5 seconds
-const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+const CONNECTION_TIMEOUT = 5_000; // 5 seconds
+const HEARTBEAT_INTERVAL = 30_000; // 30 seconds
 const MAX_RECONNECT_ATTEMPTS = 5;
-const INITIAL_RECONNECT_DELAY = 1000; // 1 second
-const MAX_RECONNECT_DELAY = 30000; // 30 seconds
+const INITIAL_RECONNECT_DELAY = 2_000; // 2 seconds
+const MAX_RECONNECT_DELAY = 30_000; // 30 seconds
 
+// For the demo purpose, the client can handle only one subscription at a time.
 export class GraphQLClient {
-  constructor(url = 'ws://localhost:4000/graphql', clientId = null) {
+  constructor(url = 'ws://localhost:4000/graphql', clientId = null, trackLastMessage = true) {
     this.url = url;
+    this.httpUrl = this.url
+      .replace('ws://', 'http://')
+      .replace('wss://', 'https://');
     this.clientId = clientId;
     this.ws = null;
     this.connected = false;
-    this.subscriptions = new Map();
-    this.subscriptionId = 0;
-    this.messageHandlers = [];
+    this.subscriptionId = null;
+    this.messageHandler = null;
     this.lastMessageId = null;
     this.heartbeatInterval = null;
     this.reconnectAttempts = 0;
+    this.trackLastMessage = trackLastMessage;
     this.maxReconnectAttempts = MAX_RECONNECT_ATTEMPTS;
     this.reconnectDelay = INITIAL_RECONNECT_DELAY;
     this.shouldReconnect = true;
@@ -64,22 +68,17 @@ export class GraphQLClient {
           const message = msg.payload.data.onMessage;
 
           // Track the last received message ID for resume functionality
-          if (message.id) {
+          if (message.id && this.trackLastMessage) {
             this.lastMessageId = message.id;
           }
 
-          // Call all registered message handlers
-          this.messageHandlers.forEach((handler) => {
-            handler(message);
-          });
+          // Call the registered message handler
+          if (this.messageHandler) {
+            this.messageHandler(message);
+          }
         } else if (msg.type === 'error') {
           console.error('❌ GraphQL error:', msg.payload);
           reject(new Error(msg.payload));
-        } else if (msg.type === 'pong') {
-          // Handle pong response from heartbeat
-          if (DEBUG) {
-            console.log('💗 Received pong from server');
-          }
         }
       });
 
@@ -92,11 +91,9 @@ export class GraphQLClient {
       });
 
       this.ws.on('close', (code, reason) => {
-        if (DEBUG) {
-          console.log(
-            `🔴 Disconnected from server (code: ${code}, reason: ${reason})`,
-          );
-        }
+        console.log(
+          `🔴 Disconnected from server (code: ${code || 'unknown'}, reason: ${reason.toString() || 'unknown'})`,
+        );
         this.connected = false;
         this.stopHeartbeat();
 
@@ -105,6 +102,7 @@ export class GraphQLClient {
           this.shouldReconnect &&
           this.reconnectAttempts < this.maxReconnectAttempts
         ) {
+          console.log('🔄 Reconnecting...');
           this.attemptReconnect();
         }
       });
@@ -123,10 +121,18 @@ export class GraphQLClient {
       throw new Error('Not connected to server');
     }
 
-    const subscriptionId = `subscription:${this.clientId}-${++this.subscriptionId}`;
+    // Unsubscribe from any existing subscription
+    if (this.subscriptionId) {
+      console.warn(
+        '❌ Client already subscribed, subscription id: ',
+        this.subscriptionId,
+      );
+      return;
+    }
 
-    // Add message handler
-    this.messageHandlers.push(onMessage);
+    // Set the single message handler
+    this.messageHandler = onMessage;
+    this.subscriptionId = `subscription:client-${this.clientId}`;
 
     // Build subscription query with optional id parameter
     const query = id
@@ -155,24 +161,19 @@ export class GraphQLClient {
     // Send subscription
     this.ws.send(
       JSON.stringify({
-        id: subscriptionId,
+        id: this.subscriptionId,
         type: 'start',
         payload,
       }),
     );
 
-    this.subscriptions.set(subscriptionId, onMessage);
     const resumeMessage = id ? ` (resuming from message ${id})` : '';
     console.log(`🔔 Subscribed to messages${resumeMessage}`);
 
-    return subscriptionId;
+    return this.subscriptionId;
   }
 
   async sendMessage(user, text) {
-    if (!this.connected) {
-      throw new Error('Not connected to server');
-    }
-
     const mutation = `
       mutation SendMessage($text: String!, $user: String!) {
         sendMessage(text: $text, user: $user) {
@@ -184,13 +185,8 @@ export class GraphQLClient {
       }
     `;
 
-    // Convert WebSocket URL to HTTP URL for mutations
-    const httpUrl = this.url
-      .replace('ws://', 'http://')
-      .replace('wss://', 'https://');
-
     try {
-      const response = await fetch(httpUrl, {
+      const response = await fetch(this.httpUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -207,6 +203,10 @@ export class GraphQLClient {
         throw new Error(result.errors[0].message);
       }
 
+      if (DEBUG) {
+        console.log('✅ Message sent:', result.data.sendMessage);
+      }
+
       return result.data.sendMessage;
     } catch (error) {
       console.error('❌ Error sending message:', error.message);
@@ -218,13 +218,14 @@ export class GraphQLClient {
     // Clear any existing heartbeat
     this.stopHeartbeat();
 
-    // Send ping every 30 seconds
+    // Use WebSocket-level ping instead of GraphQL-WS protocol ping
     this.heartbeatInterval = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         if (DEBUG) {
-          console.log('💗 Sending ping to server');
+          console.log('💗 Sending WebSocket ping to server');
         }
-        this.ws.send(JSON.stringify({ type: 'ping' }));
+        // Use WebSocket ping instead of GraphQL message
+        this.ws.ping();
       }
     }, HEARTBEAT_INTERVAL);
   }
@@ -237,6 +238,9 @@ export class GraphQLClient {
   }
 
   async attemptReconnect() {
+    this.ws = null;
+    this.clearSubscription();
+
     this.reconnectAttempts++;
     const delay = Math.min(
       this.reconnectDelay * 2 ** (this.reconnectAttempts - 1),
@@ -259,12 +263,7 @@ export class GraphQLClient {
       await this.connect();
 
       // Re-subscribe to existing subscriptions with resume logic
-      if (this.messageHandlers.length > 0) {
-        if (DEBUG) {
-          console.log('🔄 Resuming subscription...');
-        }
-        this.subscribeWithResume();
-      }
+      this.subscribe(this.messageHandler, this.lastMessageId);
     } catch (error) {
       console.error(
         `❌ Reconnection attempt ${this.reconnectAttempts} failed:`,
@@ -281,34 +280,24 @@ export class GraphQLClient {
     }
   }
 
-  subscribeWithResume() {
-    if (this.messageHandlers.length > 0 && this.connected) {
-      // Clear existing subscriptions first
-      this.subscriptions.clear();
-
-      // Use the last received message ID for resume
-      const resumeId = this.lastMessageId;
-
-      // Re-subscribe with all handlers (though typically there's one)
-      this.messageHandlers.forEach((handler) => {
-        this.subscribe(handler, resumeId);
-      });
-    }
-  }
-
-  unsubscribe(subscriptionId) {
-    if (this.subscriptions.has(subscriptionId)) {
+  unsubscribe() {
+    if (this.subscriptionId && this.ws) {
       this.ws.send(
         JSON.stringify({
-          id: subscriptionId,
+          id: this.subscriptionId,
           type: 'stop',
         }),
       );
-      this.subscriptions.delete(subscriptionId);
       if (DEBUG) {
-        console.log(`🔕 Unsubscribed: ${subscriptionId}`);
+        console.log(`🔕 Unsubscribed: ${this.subscriptionId}`);
       }
+      this.subscriptionId = null;
+      this.messageHandler = null;
     }
+  }
+
+  clearSubscription() {
+    this.subscriptionId = null;
   }
 
   disconnect() {
@@ -319,7 +308,8 @@ export class GraphQLClient {
       this.ws.close();
       this.connected = false;
       this.subscriptions.clear();
-      this.messageHandlers = [];
+      this.messageHandler = null;
+      this.subscriptionId = null;
       if (DEBUG) {
         console.log('👋 Disconnected from GraphQL server');
       }
