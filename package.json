@@ -11,7 +11,12 @@
   "scripts": {
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "server-unstable": "TRIGGER_PROBLEM_MIN=5000 TRIGGER_PROBLEM_MAX=10000 SUBSCRIPTION_PROBLEMS=break_connection node src/server-unstable.js",
+    "client-without-resume": "node src/demo-client-simple.js",
+    "client-with-resume": "TRACK_LAST_MESSAGE=true node src/demo-client-simple.js",
+    "proxy": "node src/proxy.js",
+    "client-without-resume-to-proxy": "PORT=3001 node src/demo-client-simple.js"
   },
   "dependencies": {
     "@biomejs/biome": "^2.2.2",
