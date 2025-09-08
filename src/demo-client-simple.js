@@ -47,7 +47,7 @@ async function runClient() {
   console.log('🚀 Starting Simple GraphQL Client Demo');
   console.log('=====================================');
   console.log(`Make sure the server is running on port ${port}`);
-  console.log(`Server: node src/server-simple.js (default port 4000)`);
+  console.log(`Server: node src/server-simple.js or src/server-unstable.js (default port 4000)`);
   console.log(`Client connecting to: ws://localhost:${port}/graphql`);
   console.log('=====================================\n');
 
